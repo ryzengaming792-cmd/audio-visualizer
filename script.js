@@ -294,13 +294,9 @@ if (volumeSlider) {
 
 // --- Advanced Audio Analysis & Render Loop ---
 let lastBeatTime = 0;
-let bigBeatThreshold = 80;
-let smallBeatThreshold = 70;
-let smoothedIntensity = 0; // For smooth background breathing
-
-// Automatic Gain Control (AGC) trackers
-let maxBass = 20;
-let maxMids = 20;
+let energyHistory = [];
+let bassHistory = [];
+const HISTORY_SIZE = 60; // 1 second of history at 60fps
 
 function renderFrame() {
     if (!isPlaying) return;
@@ -308,95 +304,82 @@ function renderFrame() {
     analyser.getByteFrequencyData(dataArray);
     visCtx.clearRect(0, 0, visCanvas.width, visCanvas.height);
     
-    // 1. Precise Frequency Isolation
-    let rawBass = 0;
-    for(let i=1; i<=6; i++) rawBass += dataArray[i];
-    rawBass /= 6;
+    // 1. Precise Audio Analysis
+    // Bass (bins 1-6) handles heavy drops
+    let bass = 0;
+    for(let i=1; i<=6; i++) bass += dataArray[i];
+    bass /= 6;
     
-    let rawMids = 0;
-    for(let i=20; i<=60; i++) rawMids += dataArray[i];
-    rawMids /= 40;
+    // Overall energy (bins 10-150) handles rhythmic elements (snares, hats, synths)
+    let overallEnergy = 0;
+    for(let i=10; i<=150; i++) overallEnergy += dataArray[i];
+    overallEnergy /= 140;
     
-    let rawOverallEnergy = 0;
-    for(let i=1; i<=150; i++) rawOverallEnergy += dataArray[i];
-    rawOverallEnergy /= 150;
-    
-    // 2. Automatic Gain Control (Volume Independence)
-    // Track the maximum volume and decay it slowly. This maps quiet songs and loud songs to the exact same 0-100 scale.
-    if (rawBass > maxBass) maxBass = rawBass;
-    else maxBass -= 0.2; 
-    if (maxBass < 10) maxBass = 10; 
-    
-    if (rawMids > maxMids) maxMids = rawMids;
-    else maxMids -= 0.2;
-    if (maxMids < 10) maxMids = 10;
-    
-    // Normalize to 0-100 scale
-    let bass = (rawBass / maxBass) * 100;
-    let mids = (rawMids / maxMids) * 100;
-    let overallEnergy = (rawOverallEnergy / Math.max(maxBass, maxMids)) * 100;
-    
-    // 3. Dynamic Circuit Lighting 
-    // Smooth the intensity so the background "breathes" naturally
-    let targetIntensity = Math.min(1, overallEnergy / 70);
-    smoothedIntensity += (targetIntensity - smoothedIntensity) * 0.1;
-    drawBackground(smoothedIntensity);
-    
-    // 4. Decaying Peak Threshold Beat Detection
-    let isBigBeat = false;
-    let isSmallBeat = false;
-    
-    // Big Beat (Heavy Bass - Kicks/Drops)
-    // Normalized bass peaks precisely at 100
-    if (bass > bigBeatThreshold && bass > 80) {
-        isBigBeat = true;
-        bigBeatThreshold = bass * 1.25; // Spike threshold up to ~125
-    } else {
-        bigBeatThreshold -= (bigBeatThreshold - 80) * 0.05; // Smoothly decay back down to 80
+    // Track energy history to create a moving average
+    energyHistory.push(overallEnergy);
+    bassHistory.push(bass);
+    if (energyHistory.length > HISTORY_SIZE) {
+        energyHistory.shift();
+        bassHistory.shift();
     }
     
-    // Small Beat (Snares/Hats)
-    if (mids > smallBeatThreshold && mids > 65) {
-        isSmallBeat = true;
-        smallBeatThreshold = mids * 1.2;
-    } else {
-        smallBeatThreshold -= (smallBeatThreshold - 65) * 0.1; 
+    let avgEnergy = 0;
+    let avgBass = 0;
+    for(let i=0; i<energyHistory.length; i++) {
+        avgEnergy += energyHistory[i];
+        avgBass += bassHistory[i];
     }
+    avgEnergy /= energyHistory.length;
+    avgBass /= bassHistory.length;
+    
+    // 2. Dynamic Circuit Lighting 
+    // The background completely synchronizes with overall energy smoothly
+    let intensity = overallEnergy / 255;
+    drawBackground(intensity);
+    
+    // 3. Reliable Relative Beat Detection
+    // By strictly comparing current energy to the moving average, this is 100% volume independent!
+    const isBigBeat = bass > (avgBass * 1.35) && bass > 15; // 35% louder than average bass
+    const isSmallBeat = overallEnergy > (avgEnergy * 1.1) && overallEnergy > 10; // 10% louder than average energy
     
     const now = Date.now();
     
+    // BIG BEAT - The Massive Drop
     if (isBigBeat && now - lastBeatTime > 150) {
-        // HUGE DROP: Lightning pulses on EVERY SINGLE LINE simultaneously!
+        // HUGE DROP: All lines fire lightning together
         for(let i=0; i<paths.length; i++) {
             pulses.push({
-                pathIndex: i, // 1 pulse per path!
+                pathIndex: i,
                 distance: 0,
-                speed: 15 + (smoothedIntensity * 20),
-                length: 100 + (smoothedIntensity * 100),
-                color: '#FF3B30' // Bright Red
+                speed: 15 + (intensity * 20),
+                length: 100 + (intensity * 100),
+                color: Math.random() > 0.3 ? '#FF3B30' : '#FF9500' // Mostly Red, mixed with Yellow!
             });
         }
         lastBeatTime = now;
         document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 50px rgba(255, 59, 48, 1))`;
         
-    } else if (isSmallBeat && now - lastBeatTime > 30) {
-        // SMALL BEAT: Constantly firing warm orange/yellow pulses on every little sound
-        const numPulses = Math.floor(Math.random() * 3) + 1; // 1 to 3 random lines
+    } 
+    // SMALL BEAT - Constant rhythmic pulses
+    else if (isSmallBeat && now - lastBeatTime > 40) {
+        // SMALL BEAT: Fire a huge cluster of yellow pulses on every beat!
+        const numPulses = Math.floor(Math.random() * 6) + 3; // 3 to 8 random lines
         for(let i=0; i<numPulses; i++) {
             const randomPathIndex = Math.floor(Math.random() * paths.length);
             pulses.push({
                 pathIndex: randomPathIndex,
                 distance: 0,
-                speed: 8 + (smoothedIntensity * 5),
-                length: 20 + (smoothedIntensity * 30),
-                color: '#FF9500' // Warm Orange / Yellow
+                speed: 8 + (intensity * 10),
+                length: 30 + (intensity * 50),
+                color: '#FF9500' // Yellow / Warm Orange
             });
         }
         lastBeatTime = now;
         document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 20px rgba(255, 149, 0, 0.8))`;
-    } else {
+    } 
+    else {
         // RESTING
-        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${10 + (smoothedIntensity*10)}px rgba(255, 149, 0, 0.5))`;
+        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${10 + (intensity*10)}px rgba(255, 149, 0, 0.5))`;
     }
     
     // 4. Draw traveling lightning
