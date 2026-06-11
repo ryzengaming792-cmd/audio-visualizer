@@ -81,8 +81,11 @@ function generatePCB() {
 function drawBackground(intensity) {
     bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
     
-    // Base opacity 0.05, peaks at 0.4 during heavy beats (dimmed for better contrast)
-    const lineOpacity = 0.05 + (intensity * 0.35); 
+    // Intensity is non-linear now for snappier glowing
+    const glowIntensity = Math.pow(intensity, 1.5);
+    
+    // Lines dim during quiet parts, bright during drops
+    const lineOpacity = 0.05 + (glowIntensity * 0.85); 
     
     bgCtx.lineWidth = 2;
     bgCtx.lineCap = 'round';
@@ -98,9 +101,9 @@ function drawBackground(intensity) {
         
         bgCtx.strokeStyle = `rgba(255, 59, 48, ${lineOpacity})`; 
         
-        // Add subtle glow to the whole board when music is loud
-        if (intensity > 0.5) {
-            bgCtx.shadowBlur = intensity * 10; // Dimmer glow
+        // Massive glow when lines flash together
+        if (glowIntensity > 0.2) {
+            bgCtx.shadowBlur = glowIntensity * 35; // Huge glow radius
             bgCtx.shadowColor = '#FF3B30';
         } else {
             bgCtx.shadowBlur = 0;
@@ -109,8 +112,8 @@ function drawBackground(intensity) {
         
         // Vias/Pads at the end of traces
         const last = pts[pts.length-1];
-        bgCtx.fillStyle = `rgba(255, 149, 0, ${0.1 + intensity * 0.5})`; // Dimmer vias
-        bgCtx.shadowBlur = intensity > 0.5 ? 8 : 0;
+        bgCtx.fillStyle = `rgba(255, 149, 0, ${0.1 + glowIntensity * 0.9})`;
+        bgCtx.shadowBlur = glowIntensity > 0.2 ? 15 : 0;
         bgCtx.shadowColor = '#FF9500';
         bgCtx.fillRect(last.x - 2, last.y - 2, 4, 4);
     });
@@ -301,10 +304,15 @@ function renderFrame() {
     visCtx.clearRect(0, 0, visCanvas.width, visCanvas.height);
     
     // 1. Precise Audio Analysis
-    // With fftSize 2048, each bin is ~21Hz. Bins 1 to 6 cover ~21Hz to ~130Hz (The exact range for kick drums and heavy bass drops)
+    // Bass (bins 1-6) handles drops
     let bass = 0;
     for(let i=1; i<=6; i++) bass += dataArray[i];
     bass /= 6;
+    
+    // Overall energy (bins 1-100) handles the continuous glowing
+    let overallEnergy = 0;
+    for(let i=1; i<=100; i++) overallEnergy += dataArray[i];
+    overallEnergy /= 100;
     
     // Track energy history for dynamic beats
     energyHistory.push(bass);
@@ -314,37 +322,50 @@ function renderFrame() {
     for(let i=0; i<energyHistory.length; i++) avgEnergy += energyHistory[i];
     avgEnergy /= energyHistory.length;
     
-    // Continuous lighting intensity based on bass
-    let intensity = bass / 255;
-    
     // 2. Dynamic Circuit Lighting 
+    // The background completely synchronizes with overall energy
+    let intensity = Math.min(1, overallEnergy / 180); // Scales 0-1 nicely
     drawBackground(intensity);
     
-    // 3. Perfect Beat Detection
-    // Absolute threshold lowered to 50 for quiet streams, heavily relies on relative spike (1.35x average)
-    const isBeat = bass > 50 && bass > (avgEnergy * 1.35); 
+    // 3. Dual-Tiered Beat Detection
+    const isSmallBeat = bass > 25 && bass > (avgEnergy * 1.15); 
+    const isBigBeat = bass > 60 && bass > (avgEnergy * 1.45);
     const now = Date.now();
     
-    // Spawn lightning pulses on strong beats (cooldown of 100ms)
-    if (isBeat && now - lastBeatTime > 100) {
-        const numPulses = Math.floor(Math.random() * 3) + 2;
+    if (isBigBeat && now - lastBeatTime > 150) {
+        // HUGE DROP: All lines fire lightning together
+        const numPulses = Math.floor(Math.random() * 8) + 12; // 12-20 pulses!
         for(let i=0; i<numPulses; i++) {
             const randomPathIndex = Math.floor(Math.random() * paths.length);
             pulses.push({
                 pathIndex: randomPathIndex,
                 distance: 0,
-                speed: 10 + (intensity * 10), // Lightning travels faster on harder drops
-                length: 60 + (intensity * 80), // Longer bolts on harder drops
-                color: Math.random() > 0.4 ? '#FF3B30' : '#FF9500' 
+                speed: 15 + (intensity * 15),
+                length: 80 + (intensity * 100),
+                color: '#FF3B30' // Bright Red
             });
         }
         lastBeatTime = now;
+        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 45px rgba(255, 59, 48, 1))`;
         
-        // Logo explodes with glow on the exact beat
-        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${25 + (intensity*30)}px rgba(255, 59, 48, 1))`;
+    } else if (isSmallBeat && now - lastBeatTime > 80) {
+        // SMALL BEAT: A few small pulses travel randomly
+        const numPulses = Math.floor(Math.random() * 2) + 1;
+        for(let i=0; i<numPulses; i++) {
+            const randomPathIndex = Math.floor(Math.random() * paths.length);
+            pulses.push({
+                pathIndex: randomPathIndex,
+                distance: 0,
+                speed: 6 + (intensity * 5),
+                length: 30 + (intensity * 30),
+                color: '#FF9500' // Warm Orange
+            });
+        }
+        lastBeatTime = now;
+        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 20px rgba(255, 149, 0, 0.8))`;
     } else {
-        // Smoothly return logo glow to normal
-        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${10 + (intensity*15)}px rgba(255, 149, 0, 0.6))`;
+        // RESTING
+        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${10 + (intensity*10)}px rgba(255, 149, 0, 0.5))`;
     }
     
     // 4. Draw traveling lightning
