@@ -166,8 +166,8 @@ function setupAudio() {
     if (isAudioSetup) return;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 2048; // Significantly increased resolution to isolate true sub-bass
-    analyser.smoothingTimeConstant = 0.8; // Smooths audio analysis for natural lighting transitions
+    analyser.fftSize = 2048; // High resolution for frequency isolation
+    analyser.smoothingTimeConstant = 0.4; // Lowered to capture sharp, punchy transients perfectly
     dataArray = new Uint8Array(analyser.frequencyBinCount);
     isAudioSetup = true;
 }
@@ -294,9 +294,13 @@ if (volumeSlider) {
 
 // --- Advanced Audio Analysis & Render Loop ---
 let lastBeatTime = 0;
-let energyHistory = [];
-let bassHistory = [];
-const HISTORY_SIZE = 45; // ~0.75 seconds history for dynamic thresholding
+let bigBeatThreshold = 80;
+let smallBeatThreshold = 70;
+let smoothedIntensity = 0; // For smooth background breathing
+
+// Automatic Gain Control (AGC) trackers
+let maxBass = 20;
+let maxMids = 20;
 
 function renderFrame() {
     if (!isPlaying) return;
@@ -304,45 +308,61 @@ function renderFrame() {
     analyser.getByteFrequencyData(dataArray);
     visCtx.clearRect(0, 0, visCanvas.width, visCanvas.height);
     
-    // 1. Precise Audio Analysis
-    // Bass (bins 1-8) isolates kick drums and heavy drops
-    let bass = 0;
-    for(let i=1; i<=8; i++) bass += dataArray[i];
-    bass /= 8;
+    // 1. Precise Frequency Isolation
+    let rawBass = 0;
+    for(let i=1; i<=6; i++) rawBass += dataArray[i];
+    rawBass /= 6;
     
-    // Overall energy (bins 1-250) catches every little snare, clap, and hi-hat
-    let overallEnergy = 0;
-    for(let i=1; i<=250; i++) overallEnergy += dataArray[i];
-    overallEnergy /= 250;
+    let rawMids = 0;
+    for(let i=20; i<=60; i++) rawMids += dataArray[i];
+    rawMids /= 40;
     
-    // Track energy history for dynamic beats
-    energyHistory.push(overallEnergy);
-    bassHistory.push(bass);
-    if (energyHistory.length > HISTORY_SIZE) {
-        energyHistory.shift();
-        bassHistory.shift();
+    let rawOverallEnergy = 0;
+    for(let i=1; i<=150; i++) rawOverallEnergy += dataArray[i];
+    rawOverallEnergy /= 150;
+    
+    // 2. Automatic Gain Control (Volume Independence)
+    // Track the maximum volume and decay it slowly. This maps quiet songs and loud songs to the exact same 0-100 scale.
+    if (rawBass > maxBass) maxBass = rawBass;
+    else maxBass -= 0.2; 
+    if (maxBass < 10) maxBass = 10; 
+    
+    if (rawMids > maxMids) maxMids = rawMids;
+    else maxMids -= 0.2;
+    if (maxMids < 10) maxMids = 10;
+    
+    // Normalize to 0-100 scale
+    let bass = (rawBass / maxBass) * 100;
+    let mids = (rawMids / maxMids) * 100;
+    let overallEnergy = (rawOverallEnergy / Math.max(maxBass, maxMids)) * 100;
+    
+    // 3. Dynamic Circuit Lighting 
+    // Smooth the intensity so the background "breathes" naturally
+    let targetIntensity = Math.min(1, overallEnergy / 70);
+    smoothedIntensity += (targetIntensity - smoothedIntensity) * 0.1;
+    drawBackground(smoothedIntensity);
+    
+    // 4. Decaying Peak Threshold Beat Detection
+    let isBigBeat = false;
+    let isSmallBeat = false;
+    
+    // Big Beat (Heavy Bass - Kicks/Drops)
+    // Normalized bass peaks precisely at 100
+    if (bass > bigBeatThreshold && bass > 80) {
+        isBigBeat = true;
+        bigBeatThreshold = bass * 1.25; // Spike threshold up to ~125
+    } else {
+        bigBeatThreshold -= (bigBeatThreshold - 80) * 0.05; // Smoothly decay back down to 80
     }
     
-    let avgEnergy = 0;
-    let avgBass = 0;
-    for(let i=0; i<energyHistory.length; i++) {
-        avgEnergy += energyHistory[i];
-        avgBass += bassHistory[i];
+    // Small Beat (Snares/Hats)
+    if (mids > smallBeatThreshold && mids > 65) {
+        isSmallBeat = true;
+        smallBeatThreshold = mids * 1.2;
+    } else {
+        smallBeatThreshold -= (smallBeatThreshold - 65) * 0.1; 
     }
-    avgEnergy /= energyHistory.length;
-    avgBass /= bassHistory.length;
     
-    // 2. Dynamic Circuit Lighting 
-    // The background completely synchronizes with overall energy
-    let intensity = Math.min(1, overallEnergy / 120); // Scales 0-1 nicely
-    drawBackground(intensity);
-    
-    // 3. Hyper-Responsive Dual-Tiered Beat Detection
-    // Small beats trigger on almost any fluctuation or rhythm in the song
-    const isSmallBeat = overallEnergy > 5 && overallEnergy > (avgEnergy * 1.05); 
-    
-    // Big beats trigger specifically on heavy bass drops
-    const isBigBeat = bass > 50 && bass > (avgBass * 1.35);
     const now = Date.now();
     
     if (isBigBeat && now - lastBeatTime > 150) {
@@ -351,8 +371,8 @@ function renderFrame() {
             pulses.push({
                 pathIndex: i, // 1 pulse per path!
                 distance: 0,
-                speed: 15 + (intensity * 20),
-                length: 100 + (intensity * 100),
+                speed: 15 + (smoothedIntensity * 20),
+                length: 100 + (smoothedIntensity * 100),
                 color: '#FF3B30' // Bright Red
             });
         }
@@ -367,8 +387,8 @@ function renderFrame() {
             pulses.push({
                 pathIndex: randomPathIndex,
                 distance: 0,
-                speed: 8 + (intensity * 5),
-                length: 20 + (intensity * 30),
+                speed: 8 + (smoothedIntensity * 5),
+                length: 20 + (smoothedIntensity * 30),
                 color: '#FF9500' // Warm Orange / Yellow
             });
         }
@@ -376,7 +396,7 @@ function renderFrame() {
         document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 20px rgba(255, 149, 0, 0.8))`;
     } else {
         // RESTING
-        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${10 + (intensity*10)}px rgba(255, 149, 0, 0.5))`;
+        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${10 + (smoothedIntensity*10)}px rgba(255, 149, 0, 0.5))`;
     }
     
     // 4. Draw traveling lightning
