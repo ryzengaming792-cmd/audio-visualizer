@@ -295,6 +295,7 @@ if (volumeSlider) {
 // --- Advanced Audio Analysis & Render Loop ---
 let lastBeatTime = 0;
 let energyHistory = [];
+let bassHistory = [];
 const HISTORY_SIZE = 45; // ~0.75 seconds history for dynamic thresholding
 
 function renderFrame() {
@@ -304,60 +305,70 @@ function renderFrame() {
     visCtx.clearRect(0, 0, visCanvas.width, visCanvas.height);
     
     // 1. Precise Audio Analysis
-    // Bass (bins 1-6) handles drops
+    // Bass (bins 1-8) isolates kick drums and heavy drops
     let bass = 0;
-    for(let i=1; i<=6; i++) bass += dataArray[i];
-    bass /= 6;
+    for(let i=1; i<=8; i++) bass += dataArray[i];
+    bass /= 8;
     
-    // Overall energy (bins 1-100) handles the continuous glowing
+    // Overall energy (bins 1-250) catches every little snare, clap, and hi-hat
     let overallEnergy = 0;
-    for(let i=1; i<=100; i++) overallEnergy += dataArray[i];
-    overallEnergy /= 100;
+    for(let i=1; i<=250; i++) overallEnergy += dataArray[i];
+    overallEnergy /= 250;
     
     // Track energy history for dynamic beats
-    energyHistory.push(bass);
-    if (energyHistory.length > HISTORY_SIZE) energyHistory.shift();
+    energyHistory.push(overallEnergy);
+    bassHistory.push(bass);
+    if (energyHistory.length > HISTORY_SIZE) {
+        energyHistory.shift();
+        bassHistory.shift();
+    }
     
     let avgEnergy = 0;
-    for(let i=0; i<energyHistory.length; i++) avgEnergy += energyHistory[i];
+    let avgBass = 0;
+    for(let i=0; i<energyHistory.length; i++) {
+        avgEnergy += energyHistory[i];
+        avgBass += bassHistory[i];
+    }
     avgEnergy /= energyHistory.length;
+    avgBass /= bassHistory.length;
     
     // 2. Dynamic Circuit Lighting 
     // The background completely synchronizes with overall energy
-    let intensity = Math.min(1, overallEnergy / 180); // Scales 0-1 nicely
+    let intensity = Math.min(1, overallEnergy / 120); // Scales 0-1 nicely
     drawBackground(intensity);
     
-    // 3. Dual-Tiered Beat Detection
-    const isSmallBeat = bass > 25 && bass > (avgEnergy * 1.15); 
-    const isBigBeat = bass > 60 && bass > (avgEnergy * 1.45);
+    // 3. Hyper-Responsive Dual-Tiered Beat Detection
+    // Small beats trigger on almost any sharp spike in the overall mix (snares, hats)
+    const isSmallBeat = overallEnergy > 10 && overallEnergy > (avgEnergy * 1.1); 
+    
+    // Big beats trigger specifically on heavy bass drops
+    const isBigBeat = bass > 50 && bass > (avgBass * 1.35);
     const now = Date.now();
     
     if (isBigBeat && now - lastBeatTime > 150) {
-        // HUGE DROP: All lines fire lightning together
-        const numPulses = Math.floor(Math.random() * 8) + 12; // 12-20 pulses!
-        for(let i=0; i<numPulses; i++) {
-            const randomPathIndex = Math.floor(Math.random() * paths.length);
+        // HUGE DROP: Lightning pulses on EVERY SINGLE LINE simultaneously!
+        for(let i=0; i<paths.length; i++) {
             pulses.push({
-                pathIndex: randomPathIndex,
+                pathIndex: i, // 1 pulse per path!
                 distance: 0,
-                speed: 15 + (intensity * 15),
-                length: 80 + (intensity * 100),
+                speed: 15 + (intensity * 20),
+                length: 100 + (intensity * 100),
                 color: '#FF3B30' // Bright Red
             });
         }
         lastBeatTime = now;
-        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 45px rgba(255, 59, 48, 1))`;
+        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 50px rgba(255, 59, 48, 1))`;
         
-    } else if (isSmallBeat && now - lastBeatTime > 80) {
+    } else if (isSmallBeat && now - lastBeatTime > 50) {
         // SMALL BEAT: A few small pulses travel randomly
-        const numPulses = Math.floor(Math.random() * 2) + 1;
+        const numPulses = Math.floor(Math.random() * 3) + 1; // 1 to 3 random lines
         for(let i=0; i<numPulses; i++) {
             const randomPathIndex = Math.floor(Math.random() * paths.length);
             pulses.push({
                 pathIndex: randomPathIndex,
                 distance: 0,
-                speed: 6 + (intensity * 5),
-                length: 30 + (intensity * 30),
+                speed: 8 + (intensity * 5),
+                length: 20 + (intensity * 30),
                 color: '#FF9500' // Warm Orange
             });
         }
