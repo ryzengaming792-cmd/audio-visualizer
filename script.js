@@ -338,8 +338,8 @@ function renderFrame() {
     drawBackground(intensity);
     
     // 3. Hyper-Responsive Dual-Tiered Beat Detection
-    // Small beats trigger on almost any sharp spike in the overall mix (snares, hats)
-    const isSmallBeat = overallEnergy > 10 && overallEnergy > (avgEnergy * 1.1); 
+    // Small beats trigger on almost any fluctuation or rhythm in the song
+    const isSmallBeat = overallEnergy > 5 && overallEnergy > (avgEnergy * 1.05); 
     
     // Big beats trigger specifically on heavy bass drops
     const isBigBeat = bass > 50 && bass > (avgBass * 1.35);
@@ -359,8 +359,8 @@ function renderFrame() {
         lastBeatTime = now;
         document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 50px rgba(255, 59, 48, 1))`;
         
-    } else if (isSmallBeat && now - lastBeatTime > 50) {
-        // SMALL BEAT: A few small pulses travel randomly
+    } else if (isSmallBeat && now - lastBeatTime > 30) {
+        // SMALL BEAT: Constantly firing warm orange/yellow pulses on every little sound
         const numPulses = Math.floor(Math.random() * 3) + 1; // 1 to 3 random lines
         for(let i=0; i<numPulses; i++) {
             const randomPathIndex = Math.floor(Math.random() * paths.length);
@@ -369,7 +369,7 @@ function renderFrame() {
                 distance: 0,
                 speed: 8 + (intensity * 5),
                 length: 20 + (intensity * 30),
-                color: '#FF9500' // Warm Orange
+                color: '#FF9500' // Warm Orange / Yellow
             });
         }
         lastBeatTime = now;
