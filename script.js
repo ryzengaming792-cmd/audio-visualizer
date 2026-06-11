@@ -305,6 +305,8 @@ if (volumeSlider) {
 
 // --- Advanced Audio Analysis & Render Loop ---
 let lastBeatTime = 0;
+let lastSmallBeatTime = 0;
+let lastMelodyTime = 0;
 let energyHistory = [];
 let bassHistory = [];
 let smoothedIntensity = 0; // Tracks smooth glowing
@@ -362,49 +364,62 @@ function renderFrame() {
     smoothedIntensity += (targetIntensity - smoothedIntensity) * 0.08;
     drawBackground(smoothedIntensity);
     
-    // 3. Perfect Spectral Flux Beat Detection
-    // By detecting the sharp upward "attack" (flux) of the sound wave, we perfectly isolate the exact moment of a beat hit.
-    const isBigBeat = bassFlux > 8 && bass > (avgBass * 1.25); // Sharp sub-bass hit
-    const isSmallBeat = energyFlux > 5 && overallEnergy > (avgEnergy * 1.05); // Sharp mid/high hit
+    // 3. True Commercial-Grade Audio Engine
+    // By detecting the sharp upward "attack" (flux) of the sound wave, we perfectly isolate impacts.
+    const isBigBeat = bassFlux > 10 && bass > (avgBass * 1.3); // Strict threshold for HEAVY kicks
+    const isSmallBeat = energyFlux > 5 && overallEnergy > (avgEnergy * 1.1); // LIGHT beats (snares, hats)
     
     const now = Date.now();
     
-    // BIG BEAT - The Massive Drop
-    if (isBigBeat && now - lastBeatTime > 150) {
-        // HUGE DROP: All lines fire lightning together
+    // HEAVY BEAT: The Drop
+    if (isBigBeat && now - lastBeatTime > 200) {
+        // ALL RED: Passes through all lines together at once
         for(let i=0; i<paths.length; i++) {
             pulses.push({
                 pathIndex: i,
                 distance: 0,
-                speed: 20 + (targetIntensity * 25), // Fast, aggressive lightning speed!
-                length: 120 + (targetIntensity * 60),
-                color: Math.random() > 0.3 ? '#FF3B30' : '#FF9500' // Mostly Red, mixed with Yellow!
+                speed: 12 + (targetIntensity * 5), // Steady, manageable speed
+                length: 120 + (targetIntensity * 40),
+                color: '#FF3B30' // Pure Red
             });
         }
         lastBeatTime = now;
         document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 50px rgba(255, 59, 48, 1))`;
         
     } 
-    // SMALL BEAT - Constant rhythmic pulses
-    else if (isSmallBeat && now - lastBeatTime > 40) {
-        // SMALL BEAT: Fire a huge cluster of yellow pulses on every beat!
-        const numPulses = Math.floor(Math.random() * 6) + 3; // 3 to 8 random lines
+    // LIGHT BEAT: Rhythmic Elements
+    else if (isSmallBeat && now - lastSmallBeatTime > 60) {
+        // YELLOW CLUSTER: Fires a pattern of yellow pulses
+        const numPulses = Math.floor(Math.random() * 4) + 2; // 2 to 5 random lines
         for(let i=0; i<numPulses; i++) {
             const randomPathIndex = Math.floor(Math.random() * paths.length);
             pulses.push({
                 pathIndex: randomPathIndex,
                 distance: 0,
-                speed: 12 + (targetIntensity * 15), // Fast lightning speed!
-                length: 40 + (targetIntensity * 30),
-                color: '#FF9500' // Yellow / Warm Orange
+                speed: 8 + (Math.random() * 4), // Slower rhythmic speed
+                length: 40 + (Math.random() * 30),
+                color: '#FF9500' // Yellow
             });
         }
-        lastBeatTime = now;
+        lastSmallBeatTime = now;
         document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 20px rgba(255, 149, 0, 0.8))`;
     } 
     else {
-        // RESTING
+        // RESTING Glow
         document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${10 + (smoothedIntensity*10)}px rgba(255, 149, 0, 0.5))`;
+    }
+    
+    // MELODY / REST OF SONG: Continuous Yellow Patterns
+    // Even when there is no beat, if music is playing, yellow pulses continuously travel
+    if (overallEnergy > 15 && now - lastMelodyTime > (300 - targetIntensity * 200)) {
+        pulses.push({
+            pathIndex: Math.floor(Math.random() * paths.length),
+            distance: 0,
+            speed: 5 + (Math.random() * 3), // Very relaxed minimum speed
+            length: 30 + (Math.random() * 20),
+            color: '#FF9500' // Yellow
+        });
+        lastMelodyTime = now;
     }
     
     // 4. Draw traveling lightning
