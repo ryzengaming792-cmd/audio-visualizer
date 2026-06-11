@@ -169,15 +169,22 @@ function setupAudio() {
     isAudioSetup = true;
 }
 
+let fileSourceNode = null;
+
 audioUpload.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
         if (!isAudioSetup) setupAudio();
         
-        // Disconnect old source if exists
+        // Disconnect current source from analyser
         if (source) source.disconnect();
         
-        source = audioCtx.createMediaElementSource(audio);
+        // The Web Audio API only allows creating one MediaElementSource per audio element.
+        if (!fileSourceNode) {
+            fileSourceNode = audioCtx.createMediaElementSource(audio);
+        }
+        
+        source = fileSourceNode;
         source.connect(analyser);
         analyser.connect(audioCtx.destination); // Play local files through speakers
         
@@ -274,6 +281,13 @@ function formatTime(s) {
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
 }
 
+
+const volumeSlider = document.getElementById('volumeSlider');
+if (volumeSlider) {
+    volumeSlider.addEventListener('input', (e) => {
+        audio.volume = e.target.value;
+    });
+}
 
 // --- Advanced Audio Analysis & Render Loop ---
 let lastBeatTime = 0;
