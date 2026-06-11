@@ -200,9 +200,14 @@ audioUpload.addEventListener('change', function(e) {
 
 document.getElementById('btnSystemAudio').addEventListener('click', async () => {
     try {
+        // We MUST disable browser voice-call filters, otherwise it destroys music bass and transients
         const stream = await navigator.mediaDevices.getDisplayMedia({
             video: true, // Video must be true for most browsers to allow screen share
-            audio: true
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false
+            }
         });
         
         if (!isAudioSetup) setupAudio();
@@ -296,6 +301,7 @@ if (volumeSlider) {
 let lastBeatTime = 0;
 let energyHistory = [];
 let bassHistory = [];
+let smoothedIntensity = 0; // Tracks smooth glowing
 const HISTORY_SIZE = 60; // 1 second of history at 60fps
 
 function renderFrame() {
@@ -334,8 +340,11 @@ function renderFrame() {
     
     // 2. Dynamic Circuit Lighting 
     // The background completely synchronizes with overall energy smoothly
-    let intensity = overallEnergy / 255;
-    drawBackground(intensity);
+    let targetIntensity = overallEnergy / 255;
+    
+    // Smoothly lerp the visual intensity so it breathes perfectly and never flickers
+    smoothedIntensity += (targetIntensity - smoothedIntensity) * 0.08;
+    drawBackground(smoothedIntensity);
     
     // 3. Reliable Relative Beat Detection
     // By strictly comparing current energy to the moving average, this is 100% volume independent!
@@ -351,8 +360,8 @@ function renderFrame() {
             pulses.push({
                 pathIndex: i,
                 distance: 0,
-                speed: 15 + (intensity * 20),
-                length: 100 + (intensity * 100),
+                speed: 30 + (targetIntensity * 20), // Initial burst speed!
+                length: 120 + (targetIntensity * 60),
                 color: Math.random() > 0.3 ? '#FF3B30' : '#FF9500' // Mostly Red, mixed with Yellow!
             });
         }
@@ -369,8 +378,8 @@ function renderFrame() {
             pulses.push({
                 pathIndex: randomPathIndex,
                 distance: 0,
-                speed: 8 + (intensity * 10),
-                length: 30 + (intensity * 50),
+                speed: 15 + (targetIntensity * 10), // Initial burst speed!
+                length: 40 + (targetIntensity * 30),
                 color: '#FF9500' // Yellow / Warm Orange
             });
         }
@@ -379,12 +388,17 @@ function renderFrame() {
     } 
     else {
         // RESTING
-        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${10 + (intensity*10)}px rgba(255, 149, 0, 0.5))`;
+        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${10 + (smoothedIntensity*10)}px rgba(255, 149, 0, 0.5))`;
     }
     
     // 4. Draw traveling lightning
     for (let i = pulses.length - 1; i >= 0; i--) {
         const pulse = pulses[i];
+        
+        // Physics Deceleration: Lightning bursts out fast, then smoothly glides
+        pulse.speed *= 0.92; 
+        if (pulse.speed < 2) pulse.speed = 2; // Keep it moving slowly at the end
+        
         pulse.distance += pulse.speed;
         
         const pObj = paths[pulse.pathIndex];
