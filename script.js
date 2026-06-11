@@ -81,8 +81,8 @@ function generatePCB() {
 function drawBackground(intensity) {
     bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
     
-    // Base opacity 0.15, peaks at 0.8 during heavy beats
-    const lineOpacity = 0.15 + (intensity * 0.65); 
+    // Base opacity 0.05, peaks at 0.4 during heavy beats (dimmed for better contrast)
+    const lineOpacity = 0.05 + (intensity * 0.35); 
     
     bgCtx.lineWidth = 2;
     bgCtx.lineCap = 'round';
@@ -99,8 +99,8 @@ function drawBackground(intensity) {
         bgCtx.strokeStyle = `rgba(255, 59, 48, ${lineOpacity})`; 
         
         // Add subtle glow to the whole board when music is loud
-        if (intensity > 0.4) {
-            bgCtx.shadowBlur = intensity * 15;
+        if (intensity > 0.5) {
+            bgCtx.shadowBlur = intensity * 10; // Dimmer glow
             bgCtx.shadowColor = '#FF3B30';
         } else {
             bgCtx.shadowBlur = 0;
@@ -109,8 +109,8 @@ function drawBackground(intensity) {
         
         // Vias/Pads at the end of traces
         const last = pts[pts.length-1];
-        bgCtx.fillStyle = `rgba(255, 149, 0, ${0.2 + intensity * 0.8})`;
-        bgCtx.shadowBlur = intensity > 0.4 ? 10 : 0;
+        bgCtx.fillStyle = `rgba(255, 149, 0, ${0.1 + intensity * 0.5})`; // Dimmer vias
+        bgCtx.shadowBlur = intensity > 0.5 ? 8 : 0;
         bgCtx.shadowColor = '#FF9500';
         bgCtx.fillRect(last.x - 2, last.y - 2, 4, 4);
     });
@@ -163,7 +163,7 @@ function setupAudio() {
     if (isAudioSetup) return;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 256;
+    analyser.fftSize = 2048; // Significantly increased resolution to isolate true sub-bass
     analyser.smoothingTimeConstant = 0.8; // Smooths audio analysis for natural lighting transitions
     dataArray = new Uint8Array(analyser.frequencyBinCount);
     isAudioSetup = true;
@@ -276,7 +276,8 @@ function renderFrame() {
     analyser.getByteFrequencyData(dataArray);
     visCtx.clearRect(0, 0, visCanvas.width, visCanvas.height);
     
-    // 1. Precise Audio Analysis (Bass range usually bins 1-6 at 256 fftSize)
+    // 1. Precise Audio Analysis
+    // With fftSize 2048, each bin is ~21Hz. Bins 1 to 6 cover ~21Hz to ~130Hz (The exact range for kick drums and heavy bass drops)
     let bass = 0;
     for(let i=1; i<=6; i++) bass += dataArray[i];
     bass /= 6;
@@ -293,11 +294,11 @@ function renderFrame() {
     let intensity = bass / 255;
     
     // 2. Dynamic Circuit Lighting 
-    // The entire circuit board breathes/lightens perfectly with the music
     drawBackground(intensity);
     
-    // 3. Perfect Beat Detection (Local Energy > Average Energy * Threshold)
-    const isBeat = bass > 80 && bass > (avgEnergy * 1.35); 
+    // 3. Perfect Beat Detection
+    // Absolute threshold lowered to 50 for quiet streams, heavily relies on relative spike (1.35x average)
+    const isBeat = bass > 50 && bass > (avgEnergy * 1.35); 
     const now = Date.now();
     
     // Spawn lightning pulses on strong beats (cooldown of 100ms)
