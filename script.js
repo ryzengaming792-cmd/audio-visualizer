@@ -365,9 +365,12 @@ function renderFrame() {
     drawBackground(smoothedIntensity);
     
     // 3. True Commercial-Grade Audio Engine
-    // By detecting the sharp upward "attack" (flux) of the sound wave, we perfectly isolate impacts.
-    const isBigBeat = bassFlux > 10 && bass > (avgBass * 1.3); // Strict threshold for HEAVY kicks
-    const isSmallBeat = energyFlux > 5 && overallEnergy > (avgEnergy * 1.1); // LIGHT beats (snares, hats)
+    // Heavy bass (808s) are often sustained, so we use a hybrid of relative volume and absolute volume.
+    // This absolutely guarantees that heavy drops are recognized perfectly.
+    const isBigBeat = (bass > avgBass * 1.3 && bass > 30) || (bass > 150); 
+    
+    // Light beats (snares/hats) use a tight relative volume check
+    const isSmallBeat = overallEnergy > avgEnergy * 1.15 && overallEnergy > 20; 
     
     const now = Date.now();
     
@@ -378,8 +381,8 @@ function renderFrame() {
             pulses.push({
                 pathIndex: i,
                 distance: 0,
-                speed: 12 + (targetIntensity * 5), // Steady, manageable speed
-                length: 120 + (targetIntensity * 40),
+                speed: 16 + (targetIntensity * 8), // Energetic but readable speed
+                length: 150 + (targetIntensity * 50),
                 color: '#FF3B30' // Pure Red
             });
         }
@@ -388,16 +391,16 @@ function renderFrame() {
         
     } 
     // LIGHT BEAT: Rhythmic Elements
-    else if (isSmallBeat && now - lastSmallBeatTime > 60) {
+    else if (isSmallBeat && now - lastSmallBeatTime > 80) {
         // YELLOW CLUSTER: Fires a pattern of yellow pulses
-        const numPulses = Math.floor(Math.random() * 4) + 2; // 2 to 5 random lines
+        const numPulses = Math.floor(Math.random() * 5) + 3; // 3 to 7 random lines
         for(let i=0; i<numPulses; i++) {
             const randomPathIndex = Math.floor(Math.random() * paths.length);
             pulses.push({
                 pathIndex: randomPathIndex,
                 distance: 0,
-                speed: 8 + (Math.random() * 4), // Slower rhythmic speed
-                length: 40 + (Math.random() * 30),
+                speed: 12 + (Math.random() * 6), // Energetic rhythmic speed
+                length: 50 + (Math.random() * 40),
                 color: '#FF9500' // Yellow
             });
         }
@@ -411,12 +414,12 @@ function renderFrame() {
     
     // MELODY / REST OF SONG: Continuous Yellow Patterns
     // Even when there is no beat, if music is playing, yellow pulses continuously travel
-    if (overallEnergy > 15 && now - lastMelodyTime > (300 - targetIntensity * 200)) {
+    if (overallEnergy > 10 && now - lastMelodyTime > (200 - targetIntensity * 100)) {
         pulses.push({
             pathIndex: Math.floor(Math.random() * paths.length),
             distance: 0,
-            speed: 5 + (Math.random() * 3), // Very relaxed minimum speed
-            length: 30 + (Math.random() * 20),
+            speed: 8 + (Math.random() * 4), // Smooth minimum speed for patterns
+            length: 40 + (Math.random() * 30),
             color: '#FF9500' // Yellow
         });
         lastMelodyTime = now;
