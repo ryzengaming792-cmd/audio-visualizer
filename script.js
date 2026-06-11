@@ -376,7 +376,7 @@ function renderFrame() {
             pulses.push({
                 pathIndex: i,
                 distance: 0,
-                speed: 30 + (targetIntensity * 20), // Initial burst speed!
+                speed: 20 + (targetIntensity * 25), // Fast, aggressive lightning speed!
                 length: 120 + (targetIntensity * 60),
                 color: Math.random() > 0.3 ? '#FF3B30' : '#FF9500' // Mostly Red, mixed with Yellow!
             });
@@ -394,7 +394,7 @@ function renderFrame() {
             pulses.push({
                 pathIndex: randomPathIndex,
                 distance: 0,
-                speed: 15 + (targetIntensity * 10), // Initial burst speed!
+                speed: 12 + (targetIntensity * 15), // Fast lightning speed!
                 length: 40 + (targetIntensity * 30),
                 color: '#FF9500' // Yellow / Warm Orange
             });
@@ -411,10 +411,7 @@ function renderFrame() {
     for (let i = pulses.length - 1; i >= 0; i--) {
         const pulse = pulses[i];
         
-        // Physics Deceleration: Lightning bursts out fast, then smoothly glides
-        pulse.speed *= 0.92; 
-        if (pulse.speed < 2) pulse.speed = 2; // Keep it moving slowly at the end
-        
+        // Removed artificial deceleration so lightning stays extremely fast and electric
         pulse.distance += pulse.speed;
         
         const pObj = paths[pulse.pathIndex];
