@@ -13,7 +13,7 @@ function resizeCanvases() {
     visCanvas.width = window.innerWidth;
     visCanvas.height = window.innerHeight;
     generatePCB();
-    drawStaticBackground();
+    drawBackground(0); // Initial dark state
 }
 window.addEventListener('resize', resizeCanvases);
 
@@ -78,10 +78,12 @@ function generatePCB() {
     }
 }
 
-function drawStaticBackground() {
+function drawBackground(intensity) {
     bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
     
-    // Draw the dark faint traces
+    // Base opacity 0.15, peaks at 0.8 during heavy beats
+    const lineOpacity = 0.15 + (intensity * 0.65); 
+    
     bgCtx.lineWidth = 2;
     bgCtx.lineCap = 'round';
     bgCtx.lineJoin = 'round';
@@ -93,14 +95,28 @@ function drawStaticBackground() {
         for(let i=1; i<pts.length; i++) {
             bgCtx.lineTo(pts[i].x, pts[i].y);
         }
-        bgCtx.strokeStyle = 'rgba(255, 59, 48, 0.1)'; // Faint red
+        
+        bgCtx.strokeStyle = `rgba(255, 59, 48, ${lineOpacity})`; 
+        
+        // Add subtle glow to the whole board when music is loud
+        if (intensity > 0.4) {
+            bgCtx.shadowBlur = intensity * 15;
+            bgCtx.shadowColor = '#FF3B30';
+        } else {
+            bgCtx.shadowBlur = 0;
+        }
         bgCtx.stroke();
         
-        // Draw via/pad at the end
+        // Vias/Pads at the end of traces
         const last = pts[pts.length-1];
-        bgCtx.fillStyle = 'rgba(74, 74, 82, 0.3)';
+        bgCtx.fillStyle = `rgba(255, 149, 0, ${0.2 + intensity * 0.8})`;
+        bgCtx.shadowBlur = intensity > 0.4 ? 10 : 0;
+        bgCtx.shadowColor = '#FF9500';
         bgCtx.fillRect(last.x - 2, last.y - 2, 4, 4);
     });
+    
+    // Reset shadow for next frame
+    bgCtx.shadowBlur = 0;
 }
 
 // Helper to get point at distance D along a path
@@ -148,6 +164,7 @@ function setupAudio() {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8; // Smooths audio analysis for natural lighting transitions
     dataArray = new Uint8Array(analyser.frequencyBinCount);
     isAudioSetup = true;
 }
@@ -248,8 +265,10 @@ function formatTime(s) {
 }
 
 
-// --- Lightning Render Loop ---
+// --- Advanced Audio Analysis & Render Loop ---
 let lastBeatTime = 0;
+let energyHistory = [];
+const HISTORY_SIZE = 45; // ~0.75 seconds history for dynamic thresholding
 
 function renderFrame() {
     if (!isPlaying) return;
@@ -257,35 +276,53 @@ function renderFrame() {
     analyser.getByteFrequencyData(dataArray);
     visCtx.clearRect(0, 0, visCanvas.width, visCanvas.height);
     
-    // Beat detection simple logic (check bass frequencies)
+    // 1. Precise Audio Analysis (Bass range usually bins 1-6 at 256 fftSize)
     let bass = 0;
-    for(let i=0; i<5; i++) bass += dataArray[i];
-    bass /= 5;
+    for(let i=1; i<=6; i++) bass += dataArray[i];
+    bass /= 6;
     
-    // Spawn pulses on strong beats
+    // Track energy history for dynamic beats
+    energyHistory.push(bass);
+    if (energyHistory.length > HISTORY_SIZE) energyHistory.shift();
+    
+    let avgEnergy = 0;
+    for(let i=0; i<energyHistory.length; i++) avgEnergy += energyHistory[i];
+    avgEnergy /= energyHistory.length;
+    
+    // Continuous lighting intensity based on bass
+    let intensity = bass / 255;
+    
+    // 2. Dynamic Circuit Lighting 
+    // The entire circuit board breathes/lightens perfectly with the music
+    drawBackground(intensity);
+    
+    // 3. Perfect Beat Detection (Local Energy > Average Energy * Threshold)
+    const isBeat = bass > 80 && bass > (avgEnergy * 1.35); 
     const now = Date.now();
-    if (bass > 200 && now - lastBeatTime > 100) {
-        // Spawn 2-4 pulses
+    
+    // Spawn lightning pulses on strong beats (cooldown of 100ms)
+    if (isBeat && now - lastBeatTime > 100) {
         const numPulses = Math.floor(Math.random() * 3) + 2;
         for(let i=0; i<numPulses; i++) {
             const randomPathIndex = Math.floor(Math.random() * paths.length);
             pulses.push({
                 pathIndex: randomPathIndex,
                 distance: 0,
-                speed: 8 + (bass * 0.05), // speed based on bass
-                length: 50 + (bass * 0.5), // trail length
-                color: Math.random() > 0.5 ? '#FF3B30' : '#FF9500' // Neon Red or Warm Orange
+                speed: 10 + (intensity * 10), // Lightning travels faster on harder drops
+                length: 60 + (intensity * 80), // Longer bolts on harder drops
+                color: Math.random() > 0.4 ? '#FF3B30' : '#FF9500' 
             });
         }
         lastBeatTime = now;
         
-        // Also pulse the center logo slightly
-        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${20 + (bass*0.2)}px rgba(255, 59, 48, 0.8))`;
+        // Logo explodes with glow on the exact beat
+        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${25 + (intensity*30)}px rgba(255, 59, 48, 1))`;
     } else {
-        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 20px rgba(255, 149, 0, 0.5))`;
+        // Smoothly return logo glow to normal
+        document.querySelector('.center-logo').style.filter = `drop-shadow(0 0 ${10 + (intensity*15)}px rgba(255, 149, 0, 0.6))`;
     }
     
-    // Draw active pulses
+    // 4. Draw traveling lightning
     for (let i = pulses.length - 1; i >= 0; i--) {
         const pulse = pulses[i];
         pulse.distance += pulse.speed;
@@ -293,24 +330,21 @@ function renderFrame() {
         const pObj = paths[pulse.pathIndex];
         
         if (pulse.distance - pulse.length > pObj.length) {
-            pulses.splice(i, 1); // remove dead pulse
+            pulses.splice(i, 1);
             continue;
         }
         
-        // Draw the pulse trail
         visCtx.beginPath();
         visCtx.lineCap = 'round';
         visCtx.lineJoin = 'round';
-        visCtx.lineWidth = 3;
+        visCtx.lineWidth = 4;
         visCtx.strokeStyle = pulse.color;
-        visCtx.shadowBlur = 15;
+        visCtx.shadowBlur = 20;
         visCtx.shadowColor = pulse.color;
         
         const trailEndDist = Math.max(0, pulse.distance - pulse.length);
         const trailStartDist = Math.min(pObj.length, pulse.distance);
         
-        // We need to draw a line segment from trailEndDist to trailStartDist along the path
-        // Since paths consist of straight segments, we sample points closely
         const step = 5;
         let started = false;
         for (let d = trailEndDist; d <= trailStartDist; d += step) {
@@ -322,7 +356,6 @@ function renderFrame() {
                 visCtx.lineTo(pt.x, pt.y);
             }
         }
-        // ensure we draw to the exact tip
         const tip = getPointAlongPath(pObj.points, trailStartDist);
         if (started) visCtx.lineTo(tip.x, tip.y);
         
