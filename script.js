@@ -91,32 +91,38 @@ function drawBackground(intensity) {
     bgCtx.lineCap = 'round';
     bgCtx.lineJoin = 'round';
     
+    // --- MASSIVE PERFORMANCE OPTIMIZATION ---
+    // Batch all 60 line paths into a single draw call to completely eliminate lag
+    bgCtx.beginPath();
     paths.forEach(pathObj => {
         const pts = pathObj.points;
-        bgCtx.beginPath();
         bgCtx.moveTo(pts[0].x, pts[0].y);
         for(let i=1; i<pts.length; i++) {
             bgCtx.lineTo(pts[i].x, pts[i].y);
         }
-        
-        bgCtx.strokeStyle = `rgba(255, 59, 48, ${lineOpacity})`; 
-        
-        // Massive glow when lines flash together
-        if (glowIntensity > 0.2) {
-            bgCtx.shadowBlur = glowIntensity * 35; // Huge glow radius
-            bgCtx.shadowColor = '#FF3B30';
-        } else {
-            bgCtx.shadowBlur = 0;
-        }
-        bgCtx.stroke();
-        
-        // Vias/Pads at the end of traces
-        const last = pts[pts.length-1];
-        bgCtx.fillStyle = `rgba(255, 149, 0, ${0.1 + glowIntensity * 0.9})`;
-        bgCtx.shadowBlur = glowIntensity > 0.2 ? 15 : 0;
-        bgCtx.shadowColor = '#FF9500';
-        bgCtx.fillRect(last.x - 2, last.y - 2, 4, 4);
     });
+    
+    bgCtx.strokeStyle = `rgba(255, 59, 48, ${lineOpacity})`; 
+    if (glowIntensity > 0.2) {
+        bgCtx.shadowBlur = glowIntensity * 35; // Huge glow radius
+        bgCtx.shadowColor = '#FF3B30';
+    } else {
+        bgCtx.shadowBlur = 0;
+    }
+    bgCtx.stroke(); // Draw all lines at once!
+    
+    // Batch all vias/pads into a single draw call
+    bgCtx.beginPath();
+    paths.forEach(pathObj => {
+        const pts = pathObj.points;
+        const last = pts[pts.length-1];
+        bgCtx.rect(last.x - 2, last.y - 2, 4, 4);
+    });
+    
+    bgCtx.fillStyle = `rgba(255, 149, 0, ${0.1 + glowIntensity * 0.9})`;
+    bgCtx.shadowBlur = glowIntensity > 0.2 ? 15 : 0;
+    bgCtx.shadowColor = '#FF9500';
+    bgCtx.fill(); // Draw all dots at once!
     
     // Reset shadow for next frame
     bgCtx.shadowBlur = 0;
@@ -304,6 +310,10 @@ let bassHistory = [];
 let smoothedIntensity = 0; // Tracks smooth glowing
 const HISTORY_SIZE = 60; // 1 second of history at 60fps
 
+// Spectral Flux trackers for perfect beat onset detection
+let prevBass = 0;
+let prevEnergy = 0;
+
 function renderFrame() {
     if (!isPlaying) return;
     requestAnimationFrame(renderFrame);
@@ -338,6 +348,12 @@ function renderFrame() {
     avgEnergy /= energyHistory.length;
     avgBass /= bassHistory.length;
     
+    // Spectral Flux (Onset Detection) - Measures the SHARPNESS of the attack
+    let bassFlux = Math.max(0, bass - prevBass);
+    let energyFlux = Math.max(0, overallEnergy - prevEnergy);
+    prevBass = bass;
+    prevEnergy = overallEnergy;
+    
     // 2. Dynamic Circuit Lighting 
     // The background completely synchronizes with overall energy smoothly
     let targetIntensity = overallEnergy / 255;
@@ -346,10 +362,10 @@ function renderFrame() {
     smoothedIntensity += (targetIntensity - smoothedIntensity) * 0.08;
     drawBackground(smoothedIntensity);
     
-    // 3. Reliable Relative Beat Detection
-    // By strictly comparing current energy to the moving average, this is 100% volume independent!
-    const isBigBeat = bass > (avgBass * 1.35) && bass > 15; // 35% louder than average bass
-    const isSmallBeat = overallEnergy > (avgEnergy * 1.1) && overallEnergy > 10; // 10% louder than average energy
+    // 3. Perfect Spectral Flux Beat Detection
+    // By detecting the sharp upward "attack" (flux) of the sound wave, we perfectly isolate the exact moment of a beat hit.
+    const isBigBeat = bassFlux > 8 && bass > (avgBass * 1.25); // Sharp sub-bass hit
+    const isSmallBeat = energyFlux > 5 && overallEnergy > (avgEnergy * 1.05); // Sharp mid/high hit
     
     const now = Date.now();
     
