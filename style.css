@@ -250,8 +250,13 @@ body {
 
 .player-center { flex: 1; max-width: 500px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 
-.ctrl-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; }
-.play-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--neon-red); color: #000; box-shadow: var(--glow-red); }
+.controls { display: flex; align-items: center; gap: 20px; }
+
+.ctrl-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; transition: color 0.3s; }
+.ctrl-btn:hover { color: var(--neon-red); }
+.ctrl-btn.active { color: var(--warm-orange); filter: drop-shadow(0 0 5px var(--warm-orange)); }
+
+.play-btn { width: 40px; height: 40px; border-radius: 50%; background: var(--neon-red); color: #000; box-shadow: var(--glow-red); display: flex; align-items: center; justify-content: center; }
 
 .progress-container { width: 100%; display: flex; align-items: center; gap: 10px; font-size: 0.8rem; font-family: 'Orbitron'; }
 .progress-bar-bg { flex: 1; height: 4px; background: var(--cyber-gray); border-radius: 2px; cursor: pointer; }

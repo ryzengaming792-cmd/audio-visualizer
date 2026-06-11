@@ -235,6 +235,16 @@ btnPlayPause.addEventListener('click', () => {
     isPlaying ? pauseAudio() : playAudio();
 });
 
+const btnRepeat = document.getElementById('btnRepeat');
+btnRepeat.addEventListener('click', () => {
+    audio.loop = !audio.loop;
+    if (audio.loop) {
+        btnRepeat.classList.add('active');
+    } else {
+        btnRepeat.classList.remove('active');
+    }
+});
+
 function playAudio() {
     audio.play();
     isPlaying = true;
