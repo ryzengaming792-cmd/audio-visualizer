@@ -375,14 +375,14 @@ function renderFrame() {
     const now = Date.now();
     
     // HEAVY BEAT: The Drop
-    if (isBigBeat && now - lastBeatTime > 200) {
+    if (isBigBeat && now - lastBeatTime > 250) {
         // ALL RED: Passes through all lines together at once
         for(let i=0; i<paths.length; i++) {
             pulses.push({
                 pathIndex: i,
                 distance: 0,
                 speed: 16 + (targetIntensity * 8), // Energetic but readable speed
-                length: 150 + (targetIntensity * 50),
+                length: 60 + (targetIntensity * 20), // Shortened so each pulse is distinctly separate!
                 color: '#FF3B30' // Pure Red
             });
         }
