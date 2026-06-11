@@ -147,9 +147,6 @@ function setupAudio() {
     if (isAudioSetup) return;
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioCtx.createAnalyser();
-    source = audioCtx.createMediaElementSource(audio);
-    source.connect(analyser);
-    analyser.connect(audioCtx.destination);
     analyser.fftSize = 256;
     dataArray = new Uint8Array(analyser.frequencyBinCount);
     isAudioSetup = true;
@@ -159,10 +156,58 @@ audioUpload.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (file) {
         if (!isAudioSetup) setupAudio();
+        
+        // Disconnect old source if exists
+        if (source) source.disconnect();
+        
+        source = audioCtx.createMediaElementSource(audio);
+        source.connect(analyser);
+        analyser.connect(audioCtx.destination); // Play local files through speakers
+        
         audio.src = URL.createObjectURL(file);
         document.getElementById('trackTitle').textContent = file.name.replace(/\.[^/.]+$/, "");
         document.getElementById('trackArtist').textContent = "Local File";
         playAudio();
+    }
+});
+
+document.getElementById('btnSystemAudio').addEventListener('click', async () => {
+    try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true, // Video must be true for most browsers to allow screen share
+            audio: true
+        });
+        
+        if (!isAudioSetup) setupAudio();
+        
+        // Disconnect old source
+        if (source) source.disconnect();
+        
+        source = audioCtx.createMediaStreamSource(stream);
+        source.connect(analyser);
+        // CRITICAL: We do NOT connect analyser to destination here, otherwise we get a massive feedback loop!
+        
+        document.getElementById('trackTitle').textContent = "Live System Audio";
+        document.getElementById('trackArtist').textContent = "Streaming";
+        
+        // We don't use the audio element for this, so we mock playing
+        isPlaying = true;
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        iconPlay.style.display = 'none';
+        iconPause.style.display = 'block';
+        renderFrame();
+        
+        // Stop stream when user stops sharing
+        stream.getVideoTracks()[0].onended = () => {
+            isPlaying = false;
+            iconPlay.style.display = 'block';
+            iconPause.style.display = 'none';
+            document.getElementById('trackTitle').textContent = "Stream Ended";
+        };
+        
+    } catch (err) {
+        console.error("Error capturing audio: ", err);
+        alert("Could not capture audio. Please make sure you selected a tab or screen AND checked the 'Share Audio' box!");
     }
 });
 

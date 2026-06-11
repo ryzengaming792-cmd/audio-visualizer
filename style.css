@@ -6,9 +6,10 @@
     --text-primary: #ffffff;
     --text-muted: #888891;
     --glass-bg: rgba(15, 15, 20, 0.4);
-    --glass-border: rgba(255, 59, 48, 0.1);
-    --glow-red: 0 0 15px rgba(255, 59, 48, 0.8);
-    --glow-orange: 0 0 15px rgba(255, 149, 0, 0.8);
+    --glass-border: rgba(255, 59, 48, 0.3);
+    --glow-red: 0 0 10px #FF3B30, 0 0 20px #FF3B30, 0 0 40px #FF3B30;
+    --glow-orange: 0 0 10px #FF9500, 0 0 20px #FF9500, 0 0 40px #FF9500;
+    --ambient-glow: inset 0 0 150px rgba(255, 59, 48, 0.15);
 }
 
 * {
@@ -24,6 +25,8 @@ body {
     overflow: hidden;
     height: 100vh;
     width: 100vw;
+    box-shadow: var(--ambient-glow); /* Ambient neon lighting around screen edges */
+    border: 2px solid rgba(255, 59, 48, 0.2);
 }
 
 /* Canvases */
@@ -50,10 +53,11 @@ body {
     position: absolute;
     z-index: 2;
     font-family: 'Orbitron', sans-serif;
-    color: var(--neon-red);
+    color: #fff;
+    text-shadow: var(--glow-red);
     font-size: 0.8rem;
     letter-spacing: 2px;
-    opacity: 0.8;
+    opacity: 0.9;
 }
 
 .accent-top-right {
@@ -143,7 +147,8 @@ body {
     font-family: 'Orbitron', sans-serif;
     font-weight: 900;
     font-size: 1.2rem;
-    color: var(--neon-red);
+    color: #fff;
+    text-shadow: var(--glow-red);
     letter-spacing: 2px;
 }
 
@@ -170,7 +175,8 @@ body {
 
 .cyber-accent {
     font-size: 0.9rem;
-    color: var(--warm-orange);
+    color: #fff;
+    text-shadow: var(--glow-orange);
     letter-spacing: 2px;
 }
 
@@ -207,8 +213,19 @@ body {
 
 .btn .icon { width: 16px; height: 16px; }
 
-.btn-spotify { background: #1DB954; }
-.btn-upload { background: transparent; border: 1px solid var(--neon-red); color: var(--neon-red); }
+.btn-system { background: #007AFF; box-shadow: 0 0 15px rgba(0, 122, 255, 0.4); }
+.btn-system:hover { background: #0A84FF; transform: translateY(-2px); box-shadow: 0 0 25px rgba(0, 122, 255, 0.8); }
+.btn-upload { 
+    background: rgba(255, 59, 48, 0.05); 
+    border: 1px solid var(--neon-red); 
+    color: #fff; 
+    text-shadow: 0 0 5px var(--neon-red);
+    box-shadow: inset 0 0 10px rgba(255, 59, 48, 0.2), 0 0 10px rgba(255, 59, 48, 0.2);
+}
+.btn-upload:hover {
+    background: rgba(255, 59, 48, 0.2);
+    box-shadow: inset 0 0 15px rgba(255, 59, 48, 0.4), var(--glow-red);
+}
 
 .divider {
     display: flex;
